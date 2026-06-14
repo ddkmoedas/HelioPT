@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HelioPT — Mapa Solar</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="sun-cursor" id="sun-cursor" aria-hidden="true">
+    <span class="sun-core"></span>
+  </div>
+ 
+  <!-- Loading -->
+  <div class="loading-overlay" id="loading">
+    <div class="logo">Helio<span style="color:#f59e0b">PT</span></div>
+    <div class="spinner"></div>
+  </div>
+ 
+  <!-- Navbar -->
+  <nav class="navbar">
+    <a href="index.html" class="logo">Helio<span>PT</span></a>
+    <div class="nav-links" id="nav-links">
+      <a href="#">Sobre</a>
+      <a href="#">Como funciona</a>
+      <a href="login.html" class="btn btn-outline" style="margin-left:16px" id="nav-login">Login</a>
+      <a href="register.html" class="btn btn-primary" id="nav-register">Registar</a>
+    </div>
+  </nav>
+ 
+  <!-- Mapa -->
+  <div id="mapa"></div>
+ 
+  <section class="map-hud" aria-label="Resumo do mapa solar">
+    <div>
+      <p class="hud-kicker">☀️ Mapa solar interativo</p>
+      <h1>Descobre o potencial solar da tua regiao</h1>
+      <p class="hud-copy">Clica numa zona de Portugal para ver medias solares, estimar producao e escolher paineis adequados ao teu uso.</p>
+    </div>
+    <div class="hud-stats">
+      <div><strong>7</strong><span>📍 regioes</span></div>
+      <div><strong>5.5</strong><span>🔆 kWh/m2 max</span></div>
+      <div><strong>20</strong><span>🔋 paineis max</span></div>
+    </div>
+  </section>
+ 
+  <div class="map-legend" aria-label="Legenda das regioes">
+    <span><i style="background:#3b82f6"></i>Norte</span>
+    <span><i style="background:#22c55e"></i>Centro</span>
+    <span><i style="background:#eab308"></i>Lisboa</span>
+    <span><i style="background:#f97316"></i>Alentejo</span>
+    <span><i style="background:#ef4444"></i>Algarve</span>
+    <span><i style="background:#8b5cf6"></i>Acores</span>
+    <span><i style="background:#06b6d4"></i>Madeira</span>
+  </div>
+ 
+  <!-- Painel lateral (aparece ao clicar numa região) -->
+  <div id="painel" style="
+    display:none;
+    position:absolute;
+    top: 80px;
+    right: 20px;
+    width: 280px;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    padding: 20px;
+    z-index: 999;
+    color: #f8fafc;
+  ">
+    <h3 id="painel-titulo" style="color:#f59e0b; margin-bottom:12px; font-size:18px;"></h3>
+ 
+    <div style="display:flex; gap:8px; margin-bottom:16px;">
+      <button class="btn btn-primary media-btn" data-tipo="resumo" style="flex:1; font-size:13px;" onclick="mostrarResumoRegiao(regiaoAtual)">Resumo</button>
+      <button class="btn btn-outline media-btn" data-tipo="dia" style="flex:1; font-size:13px;" onclick="verMedia('dia')">Dia</button>
+      <button class="btn btn-outline media-btn" data-tipo="ano" style="flex:1; font-size:13px;" onclick="verMedia('ano')">Ano</button>
+    </div>
+ 
+    <div id="painel-dados" style="color:#94a3b8; font-size:14px;">
+      Seleciona uma opção acima
+    </div>
+ 
+    <button class="btn btn-primary" onclick="abrirPaineis(regiaoAtual)" style="width:100%; margin-top:16px;">
+      Escolher paineis solares
+    </button>
+ 
+    <button onclick="document.getElementById('painel').style.display='none'"
+      style="margin-top:16px; background:none; border:none; color:#64748b; cursor:pointer; font-size:13px;">
+      ✕ Fechar
+    </button>
+  </div>
+ 
+  <div class="panel-modal" id="paineis-modal" aria-hidden="true">
+    <div class="panel-dialog panel-dialog-steps">
+      <div class="panel-dialog-header">
+        <div>
+          <div class="panel-dialog-title">🔋 Paineis solares - <span id="regiao-nome">Algarve</span></div>
+          <div class="panel-dialog-sub" id="regiao-dados">5.5 kWh/m2/dia - media de 2008 kWh/m2/ano</div>
+        </div>
+        <button class="panel-close" onclick="fecharPaineis()" aria-label="Fechar">x</button>
+      </div>
+ 
+      <div class="steps">
+        <div class="step">
+          <div class="step-dot active" id="dot1">1</div>
+          <div class="step-label active" id="lbl1">Para que?</div>
+        </div>
+        <div class="step">
+          <div class="step-dot" id="dot2">2</div>
+          <div class="step-label" id="lbl2">Quantidade</div>
+        </div>
+        <div class="step">
+          <div class="step-dot" id="dot3">3</div>
+          <div class="step-label" id="lbl3">Escolher</div>
+        </div>
+      </div>
+ 
+      <div class="step-section visible" id="sec1">
+        <div class="section-title">Para que vais usar a energia solar?</div>
+        <div class="section-hint">Podes selecionar mais do que uma opcao.</div>
+        <div class="uso-grid" id="uso-grid"></div>
+      </div>
+ 
+      <div class="step-section" id="sec2">
+        <div class="rec-box">
+          <div class="rec-title">Recomendacao para o teu uso</div>
+          <div class="rec-text" id="rec-text">Seleciona uma ou mais opcoes no passo anterior.</div>
+        </div>
+        <div class="qty-section">
+          <div class="qty-row">
+            <div class="qty-info">Numero de paineis: <strong id="qty-label">2 paineis</strong></div>
+            <div class="qty-controls">
+              <button class="qty-btn" onclick="changeQty(-1)">-</button>
+              <span class="qty-val" id="qty-val">2</span>
+              <button class="qty-btn" onclick="changeQty(1)">+</button>
+            </div>
+          </div>
+          <div class="qty-sub" id="qty-sub">Producao estimada: -</div>
+        </div>
+      </div>
+ 
+      <div class="step-section" id="sec3">
+        <div class="filter-bar">
+          <button class="ftab ftab-all active" onclick="filterPaineis('all',this)">Todos</button>
+          <button class="ftab ftab-eco" onclick="filterPaineis('eco',this)">Economico ate 300 EUR</button>
+          <button class="ftab ftab-mid" onclick="filterPaineis('mid',this)">Medio 300-600 EUR</button>
+          <button class="ftab ftab-good" onclick="filterPaineis('good',this)">Bom 600-1000 EUR</button>
+          <button class="ftab ftab-prem" onclick="filterPaineis('prem',this)">Premium +1000 EUR</button>
+        </div>
+        <div class="panels-grid" id="paineis-grid"></div>
+      </div>
+ 
+      <div class="panel-dialog-footer">
+        <div class="footer-info" id="total-preco">Seleciona o teu uso para comecar</div>
+        <div class="nav-btns">
+          <button class="btn-back" id="btn-back" onclick="goBack()" style="display:none">Voltar</button>
+          <button class="footer-btn" id="btn-next" onclick="goNext()" disabled>Continuar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+ 
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/topojson-client@3/dist/topojson-client.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script>
+    // ---- Sessao do utilizador ----
+    let utilizadorAtual = null
+ 
+    async function verificarSessao() {
+      const { data } = await supabaseClient.auth.getSession()
+      utilizadorAtual = data.session ? data.session.user : null
+      atualizarNavbar()
+    }
+ 
+    function atualizarNavbar() {
+      const loginBtn = document.getElementById('nav-login')
+      const registerBtn = document.getElementById('nav-register')
+      if (utilizadorAtual) {
+        const meta = utilizadorAtual.user_metadata || {}
+        const nome = meta.nome || utilizadorAtual.email.split('@')[0]
+        loginBtn.textContent = '👤 ' + nome
+        loginBtn.href = '#'
+        loginBtn.onclick = (e) => { e.preventDefault() }
+        registerBtn.textContent = 'Sair'
+        registerBtn.href = '#'
+        registerBtn.classList.remove('btn-primary')
+        registerBtn.classList.add('btn-outline')
+        registerBtn.onclick = async (e) => {
+          e.preventDefault()
+          await supabaseClient.auth.signOut()
+          window.location.reload()
+        }
+      }
+    }
+ 
+    verificarSessao()
+ 
+    // Dados solares por região (médias reais)
+    const dadosSolares = {
+      "PT11": { nome: "Norte",    dia: 4.1, ano: 1497 },
+      "PT16": { nome: "Centro",   dia: 4.5, ano: 1643 },
+      "PT17": { nome: "Lisboa",   dia: 4.8, ano: 1752 },
+      "PT18": { nome: "Alentejo", dia: 5.2, ano: 1898 },
+      "PT15": { nome: "Algarve",  dia: 5.5, ano: 2008 },
+      "PT20": { nome: "Açores",   dia: 3.9, ano: 1424 },
+      "PT30": { nome: "Madeira",  dia: 4.6, ano: 1679 }
+    }
+ 
+    const cores = {
+      "PT11": "#3b82f6",
+      "PT16": "#22c55e",
+      "PT17": "#eab308",
+      "PT18": "#f97316",
+      "PT15": "#ef4444",
+      "PT20": "#8b5cf6",
+      "PT30": "#06b6d4"
+    }
+ 
+    let regiaoAtual = null
+    let camadaAtual = null
+ 
+    // Iniciar mapa
+    const mapa = L.map('mapa', { zoomControl: true }).setView([39.5, -8.0], 6)
+ 
+    // Fundo escuro
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
+      attribution: '© OpenStreetMap © CartoDB'
+    }).addTo(mapa)
+ 
+    // Cursor personalizado (efeito sol) — só no desktop
+    const isMobile = window.innerWidth <= 768
+    if (!isMobile) {
+      document.body.classList.add('solar-cursor-enabled')
+      const sunCursor = document.getElementById('sun-cursor')
+      window.addEventListener('mousemove', (event) => {
+        sunCursor.style.transform = `translate(${event.clientX - 19}px, ${event.clientY - 19}px)`
+        sunCursor.classList.add('visible')
+      })
+      window.addEventListener('mouseleave', () => sunCursor.classList.remove('visible'))
+    }
+ 
+    // Carregar mapa de Portugal
+    fetch('https://raw.githubusercontent.com/eurostat/Nuts2json/master/pub/v2/2021/4326/20M/2.json')
+      .then(r => r.json())
+      .then(topo => {
+        const geojson = topojson.feature(topo, topo.objects.nutsrg)
+        const portugal = {
+          type: "FeatureCollection",
+          features: geojson.features.filter(f => f.properties.id.startsWith("PT"))
+        }
+ 
+        const portugalLayer = L.geoJSON(portugal, {
+          style: f => ({
+            color: '#0f172a',
+            weight: 2,
+            fillColor: cores[f.properties.id] || '#f59e0b',
+            fillOpacity: 0.65
+          }),
+          onEachFeature: (feature, layer) => {
+            const id = feature.properties.id
+            const dados = dadosSolares[id]
+            if (!dados) return
+ 
+            layer.bindTooltip(`<b>${dados.nome}</b>`, {
+              permanent: true,
+              direction: 'center',
+              className: 'label-regiao'
+            })
+ 
+            layer.on('click', () => {
+              if (camadaAtual) {
+                camadaAtual.setStyle({ weight: 2, fillOpacity: 0.65 })
+              }
+              camadaAtual = layer
+              layer.setStyle({ weight: 4, fillOpacity: 0.92 })
+              regiaoAtual = id
+              document.body.classList.add('region-selected')
+              mostrarResumoRegiao(id)
+              document.getElementById('painel').style.display = 'block'
+            })
+ 
+            layer.on('mouseover', () => layer.setStyle({ fillOpacity: 0.9 }))
+            layer.on('mouseout',  () => {
+              if (layer !== camadaAtual) layer.setStyle({ fillOpacity: 0.65 })
+            })
+          }
+        }).addTo(mapa)
+ 
+        mapa.fitBounds(portugalLayer.getBounds(), { padding: [34, 34] })
+ 
+        // Esconder loading
+        document.getElementById('loading').style.display = 'none'
+      })
+      .catch(() => {
+        document.getElementById('loading').style.display = 'none'
+        document.body.insertAdjacentHTML('beforeend', `
+          <div class="map-error">
+            Nao foi possivel carregar o mapa agora. Confirma a ligacao a internet e atualiza a pagina.
+          </div>
+        `)
+      })
+ 
+    function mostrarResumoRegiao(id) {
+      if (!id) return
+      const d = dadosSolares[id]
+      const producaoDia = d.dia * 0.4
+      const producaoAno = d.ano * 0.4
+      document.getElementById('painel-titulo').textContent = `☀️ ${d.nome}`
+      document.getElementById('painel-dados').innerHTML = `
+        <div class="region-summary">
+          <div class="summary-card highlight">
+            <span>🔆 Potencial diario</span>
+            <strong>${d.dia} kWh/m2</strong>
+          </div>
+          <div class="summary-card">
+            <span>🔋 Painel 400W</span>
+            <strong>${producaoDia.toFixed(2)} kWh/dia</strong>
+          </div>
+          <div class="summary-card">
+            <span>📈 Producao anual</span>
+            <strong>${Math.round(producaoAno)} kWh/ano</strong>
+          </div>
+          <div class="summary-card">
+            <span>💶 Poupanca estimada</span>
+            <strong>${Math.round(producaoAno * 0.16)} EUR/ano</strong>
+          </div>
+          <div class="summary-card wide">
+            <span>🏆 Classificacao solar</span>
+            <strong>${classificarPotencial(d.dia)}</strong>
+          </div>
+        </div>
+        <p class="region-tip">✨ Ve a media por dia ou por ano. Quando quiseres orcamento, abre o configurador de paineis.</p>
+      `
+      setMediaTab('resumo')
+    }
+ 
+    function classificarPotencial(valor) {
+      if (valor >= 5.2) return '🔥 Excelente para autoconsumo'
+      if (valor >= 4.7) return '⚡ Muito bom para casa e negocio'
+      if (valor >= 4.2) return '🌤️ Bom potencial anual'
+      return '🔋 Moderado, ideal com bateria'
+    }
+ 
+    function setMediaTab(tipo) {
+      document.querySelectorAll('.media-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tipo === tipo)
+      })
+    }
+ 
+    function verMedia(tipo) {
+      if (!regiaoAtual) return
+      const d = dadosSolares[regiaoAtual]
+      setMediaTab(tipo)
+ 
+      if (tipo === 'dia') {
+        const painelDia = d.dia * 0.4
+        const quatroPaineis = painelDia * 4
+        document.getElementById('painel-dados').innerHTML = `
+          <div class="metric-focus">
+            <span>☀️ Media diaria</span>
+            <strong>${d.dia} kWh/m2</strong>
+            <p>Estimativa simples para perceber o impacto diario nesta regiao.</p>
+            <div class="metric-list">
+              <div><span>🔋 1 painel 400W</span><strong>${painelDia.toFixed(2)} kWh/dia</strong></div>
+              <div><span>🏠 4 paineis</span><strong>${quatroPaineis.toFixed(1)} kWh/dia</strong></div>
+              <div><span>📅 30 dias</span><strong>${Math.round(quatroPaineis * 30)} kWh/mes</strong></div>
+            </div>
+          </div>
+        `
+      } else {
+        const painelAno = d.ano * 0.4
+        const seisPaineis = painelAno * 6
+        document.getElementById('painel-dados').innerHTML = `
+          <div class="metric-focus">
+            <span>📈 Media anual</span>
+            <strong>${d.ano} kWh/m2</strong>
+            <p>Boa para comparar regioes e estimar retorno ao longo do ano.</p>
+            <div class="metric-list">
+              <div><span>🔋 1 painel 400W</span><strong>${Math.round(painelAno)} kWh/ano</strong></div>
+              <div><span>🏡 6 paineis</span><strong>${Math.round(seisPaineis)} kWh/ano</strong></div>
+              <div><span>💶 Poupanca 6 paineis</span><strong>${Math.round(seisPaineis * 0.16)} EUR/ano</strong></div>
+            </div>
+          </div>
+        `
+      }
+    }
+ 
+    const usos = [
+      {id:'casual', icon:'🏠', nome:'Uso casual', desc:'Iluminacao, TV e carregamentos basicos', kwh:3, paineis:3},
+      {id:'carro', icon:'🚗', nome:'Carro eletrico', desc:'Carregar veiculo eletrico em casa', kwh:10, paineis:8},
+      {id:'festa', icon:'🎉', nome:'Evento / Festa', desc:'Som, luzes e equipamentos temporarios', kwh:5, paineis:5},
+      {id:'piscina', icon:'🏊', nome:'Piscina', desc:'Bomba, aquecimento e filtracao', kwh:8, paineis:6},
+      {id:'negocio', icon:'🏪', nome:'Negocio / Loja', desc:'Climatizacao, caixas e luz 8h/dia', kwh:20, paineis:12},
+      {id:'completo', icon:'⚡', nome:'Casa completa', desc:'AC, eletrodomesticos e aquecimento', kwh:15, paineis:10},
+      {id:'camping', icon:'⛺', nome:'Camping / Rural', desc:'Caravana, casa de campo ou off-grid', kwh:2, paineis:2},
+      {id:'bomba', icon:'💧', nome:'Bomba de agua', desc:'Irrigacao agricola e abastecimento', kwh:6, paineis:4},
+      {id:'bateria', icon:'🔋', nome:'Com bateria', desc:'Armazenar energia para a noite', kwh:12, paineis:7}
+    ]
+ 
+    const paineis = [
+      {id:1, img:'https://images.unsplash.com/photo-1509391366360-2e959784a276?w=400&q=80', nome:'Risen RSM40-8', marca:'Risen Energy', tipo:'eco', watts:400, eficiencia:19.5, preco:189, cor:'#22c55e', badge:'Mais barato', desc:'Policristalino basico', badgeCor:'#14532d', badgeBg:'#bbf7d0'},
+      {id:2, img:'https://images.unsplash.com/photo-1558449028-b53a39d100fc?w=400&q=80', nome:'JA Solar JAM54', marca:'JA Solar', tipo:'eco', watts:380, eficiencia:18.8, preco:210, cor:'#22c55e', badge:'Economico', desc:'Boa relacao qualidade', badgeCor:'#14532d', badgeBg:'#bbf7d0'},
+      {id:3, img:'https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=400&q=80', nome:'Longi Hi-MO 5', marca:'Longi Solar', tipo:'mid', watts:450, eficiencia:21.3, preco:320, cor:'#3b82f6', badge:'Popular', desc:'Monocristalino PERC', badgeCor:'#1e3a8a', badgeBg:'#bfdbfe'},
+      {id:4, img:'https://images.unsplash.com/photo-1591696205602-2f950c417cb9?w=400&q=80', nome:'Canadian Solar HiKu', marca:'Canadian Solar', tipo:'mid', watts:430, eficiencia:20.6, preco:290, cor:'#3b82f6', badge:'Recomendado', desc:'Alta durabilidade', badgeCor:'#1e3a8a', badgeBg:'#bfdbfe'},
+      {id:5, img:'https://images.unsplash.com/photo-1548345680-f5475ea5df84?w=400&q=80', nome:'Jinko Tiger Neo', marca:'Jinko Solar', tipo:'good', watts:500, eficiencia:22.1, preco:480, cor:'#f59e0b', badge:'Alta eficiencia', desc:'Tecnologia N-type', badgeCor:'#78350f', badgeBg:'#fef3c7'},
+      {id:6, img:'https://images.unsplash.com/photo-1624397640148-949b1732bb0a?w=400&q=80', nome:'Trina Vertex S+', marca:'Trina Solar', tipo:'good', watts:505, eficiencia:22.4, preco:510, cor:'#f59e0b', badge:'Melhor custo/W', desc:'Bifacial opcional', badgeCor:'#78350f', badgeBg:'#fef3c7'},
+      {id:7, img:'https://images.unsplash.com/photo-1579548122080-c35fd6820ecb?w=400&q=80', nome:'SunPower Maxeon 6', marca:'SunPower', tipo:'prem', watts:530, eficiencia:24.1, preco:980, cor:'#a855f7', badge:'Top mundial', desc:'25 anos garantia', badgeCor:'#581c87', badgeBg:'#e9d5ff'},
+      {id:8, img:'https://images.unsplash.com/photo-1611365892117-00ac5ef43c90?w=400&q=80', nome:'REC Alpha Pure', marca:'REC Group', tipo:'prem', watts:520, eficiencia:23.8, preco:1050, cor:'#a855f7', badge:'Premium EU', desc:'Fabricado na Europa', badgeCor:'#581c87', badgeBg:'#e9d5ff'}
+    ]
+ 
+    let step = 1
+    let usosSelecionados = []
+    let qty = 2
+    let filtroAtivo = 'all'
+    let selecionado = null
+    let regiaoPopup = 'PT15'
+ 
+    function abrirPaineis(id) {
+      if (!id || !dadosSolares[id]) return
+      regiaoPopup = id
+      const d = dadosSolares[id]
+      document.getElementById('regiao-nome').textContent = d.nome
+      document.getElementById('regiao-dados').textContent = d.dia + ' kWh/m2/dia - media de ' + d.ano + ' kWh/m2/ano'
+      document.getElementById('paineis-modal').classList.add('active')
+      document.getElementById('paineis-modal').setAttribute('aria-hidden', 'false')
+      renderUsos()
+      goToStep(1)
+      updateFooter()
+    }
+ 
+    function fecharPaineis() {
+      document.getElementById('paineis-modal').classList.remove('active')
+      document.getElementById('paineis-modal').setAttribute('aria-hidden', 'true')
+    }
+ 
+    function renderUsos() {
+      document.getElementById('uso-grid').innerHTML = usos.map(u => `
+        <button class="uso-card${usosSelecionados.includes(u.id) ? ' selected' : ''}" onclick="toggleUso('${u.id}')">
+          <div class="uso-icon">${u.icon}</div>
+          <div class="uso-name">${u.nome}</div>
+          <div class="uso-desc">${u.desc}</div>
+          <div class="uso-kwh">~${u.kwh} kWh/dia</div>
+        </button>
+      `).join('')
+    }
+ 
+    function toggleUso(id) {
+      usosSelecionados = usosSelecionados.includes(id)
+        ? usosSelecionados.filter(x => x !== id)
+        : [...usosSelecionados, id]
+      renderUsos()
+      updateFooter()
+    }
+ 
+    function usosAtuais() {
+      return usos.filter(u => usosSelecionados.includes(u.id))
+    }
+ 
+    function calcularRecomendacao() {
+      const selecionados = usosAtuais()
+      const kwh = selecionados.reduce((total, u) => total + u.kwh, 0)
+      const paineisBase = selecionados.reduce((total, u) => total + u.paineis, 0)
+      return {
+        kwh,
+        nomes: selecionados.map(u => u.nome).join(', '),
+        paineis: Math.max(1, Math.min(20, Math.ceil(paineisBase * 0.85)))
+      }
+    }
+ 
+    function goNext() {
+      if (step === 1 && usosSelecionados.length === 0) return
+      if (step < 3) {
+        goToStep(step + 1)
+      } else {
+        if (!selecionado) return
+        if (!utilizadorAtual) {
+          if (confirm('Precisas de iniciar sessao para finalizar a compra. Ir para o login agora?')) {
+            window.location.href = 'login.html'
+          }
+          return
+        }
+        finalizarCompra()
+      }
+    }
+ 
+    function finalizarCompra() {
+      const p = paineis.find(x => x.id === selecionado)
+      alert('Compra confirmada: ' + qty + ' x ' + p.nome + ' = ' + (p.preco * qty).toLocaleString('pt-PT') + ' EUR')
+    }
+ 
+    function goBack() {
+      if (step > 1) goToStep(step - 1)
+    }
+ 
+    function goToStep(s) {
+      document.querySelectorAll('.step-section').forEach(sec => sec.classList.remove('visible'))
+      step = s
+      document.getElementById('sec' + step).classList.add('visible')
+      updateStepUI()
+      if (step === 2) setupStep2()
+      if (step === 3) renderPaineis()
+    }
+ 
+    function updateStepUI() {
+      for (let i = 1; i <= 3; i++) {
+        const dot = document.getElementById('dot' + i)
+        const lbl = document.getElementById('lbl' + i)
+        dot.className = 'step-dot' + (i < step ? ' done' : i === step ? ' active' : '')
+        lbl.className = 'step-label' + (i === step ? ' active' : '')
+        dot.textContent = i < step ? 'OK' : i
+      }
+      document.getElementById('btn-back').style.display = step > 1 ? 'block' : 'none'
+      const next = document.getElementById('btn-next')
+      next.disabled = (step === 1 && usosSelecionados.length === 0) || (step === 3 && !selecionado)
+      next.textContent = step === 3 ? 'Finalizar compra' : 'Continuar'
+    }
+ 
+    function setupStep2() {
+      const rec = calcularRecomendacao()
+      qty = rec.paineis
+      document.getElementById('rec-text').textContent = `Selecionaste: ${rec.nomes}. Recomendamos cerca de ${qty} paineis para ${rec.kwh} kWh/dia.`
+      updateQtyInfo()
+    }
+ 
+    function updateQtyInfo() {
+      const d = dadosSolares[regiaoPopup]
+      const prod = qty * 0.4 * d.dia
+      document.getElementById('qty-val').textContent = qty
+      document.getElementById('qty-label').textContent = qty + ' painel' + (qty > 1 ? 's' : '')
+      document.getElementById('qty-sub').textContent = `Producao estimada: ${prod.toFixed(1)} kWh/dia em ${d.nome} - cerca de ${Math.round(prod * 0.16 * 365)} EUR poupados/ano`
+      if (selecionado) updateFooter()
+    }
+ 
+    function changeQty(delta) {
+      qty = Math.max(1, Math.min(20, qty + delta))
+      updateQtyInfo()
+      renderPaineis()
+    }
+ 
+    function renderPaineis() {
+      const grid = document.getElementById('paineis-grid')
+      const lista = filtroAtivo === 'all' ? paineis : paineis.filter(p => p.tipo === filtroAtivo)
+      grid.innerHTML = lista.map(p => {
+        const totalPreco = (p.preco * qty).toLocaleString('pt-PT')
+        const efPct = Math.round((p.eficiencia / 25) * 100)
+        return `
+          <div class="panel-card${selecionado === p.id ? ' selected' : ''}" onclick="selectCard(${p.id})">
+            <div class="panel-card-img">
+              <img src="${p.img}" alt="${p.nome}" class="panel-card-photo" loading="lazy">
+              <span class="panel-card-badge" style="background:${p.badgeBg};color:${p.badgeCor}">${p.badge}</span>
+            </div>
+            <div class="panel-card-body">
+              <div class="panel-card-name">${p.nome}</div>
+              <div class="panel-card-brand">${p.marca} - ${p.desc}</div>
+              <div class="eff-bar"><div class="eff-fill" style="width:${efPct}%;background:${p.cor}"></div></div>
+              <div class="panel-card-specs">
+                <span class="spec">${p.watts}W</span>
+                <span class="spec">${p.eficiencia}% ef.</span>
+              </div>
+              <div class="panel-card-price-row">
+                <span class="panel-card-price">${p.preco} EUR</span>
+                <span class="panel-card-total">x${qty} = ${totalPreco} EUR</span>
+              </div>
+            </div>
+          </div>`
+      }).join('')
+    }
+ 
+    function selectCard(id) {
+      selecionado = id
+      renderPaineis()
+      updateFooter()
+      updateStepUI()
+    }
+ 
+    function updateFooter() {
+      const total = document.getElementById('total-preco')
+      const next = document.getElementById('btn-next')
+      if (step === 1) {
+        const count = usosSelecionados.length
+        total.textContent = count ? `${count} uso${count > 1 ? 's' : ''} selecionado${count > 1 ? 's' : ''}` : 'Seleciona o teu uso para comecar'
+        if (next) next.disabled = count === 0
+        return
+      }
+      if (!selecionado) {
+        const rec = calcularRecomendacao()
+        total.textContent = rec.kwh ? `${qty} paineis recomendados - ${rec.kwh} kWh/dia de consumo` : 'Escolhe um painel'
+        return
+      }
+      const p = paineis.find(x => x.id === selecionado)
+      total.innerHTML = `Total: <strong>${(p.preco * qty).toLocaleString('pt-PT')} EUR</strong> - ${qty} x ${p.nome}`
+    }
+ 
+    function filterPaineis(tipo, btn) {
+      filtroAtivo = tipo
+      document.querySelectorAll('.ftab').forEach(t => t.classList.remove('active'))
+      btn.classList.add('active')
+      renderPaineis()
+    }
+  </script>
+</body>
+</html>
+ 

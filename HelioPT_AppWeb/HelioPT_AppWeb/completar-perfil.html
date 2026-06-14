@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HelioPT - Completar Perfil</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="auth-page">
+  <main class="auth-shell">
+    <section class="auth-info">
+      <a href="index.html" class="auth-brand">Helio<span>PT</span></a>
+      <p class="auth-kicker">☀️ Quase lá!</p>
+      <h1>Falta pouco para teres o teu perfil solar.</h1>
+      <p>Precisamos de mais alguns dados para personalizar a tua experiência no HelioPT.</p>
+
+      <div class="auth-benefits">
+        <div><strong>👤 Perfil completo</strong><span>Nome e username para identificar a tua conta.</span></div>
+        <div><strong>📍 Simulacoes guardadas</strong><span>Acede a qualquer momento ao teu orcamento.</span></div>
+        <div><strong>🔒 Dados seguros</strong><span>A tua informacao fica protegida pelo Supabase.</span></div>
+      </div>
+    </section>
+
+    <section class="form-card auth-card">
+      <div class="auth-card-top">
+        <div class="auth-sun">☀️</div>
+        <div>
+          <div class="logo-center">Helio<span>PT</span></div>
+          <p class="auth-card-sub">Completa o teu perfil</p>
+        </div>
+      </div>
+
+      <h2>Mais um passo</h2>
+      <p>Entra com o Google foi um sucesso! Agora diz-nos o teu nome e escolhe um username.</p>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nome</label>
+          <div class="input-shell">
+            <span>👤</span>
+            <input type="text" id="nome" placeholder="O teu nome" autocomplete="given-name">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Apelido</label>
+          <div class="input-shell">
+            <span>👤</span>
+            <input type="text" id="apelido" placeholder="O teu apelido" autocomplete="family-name">
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Username</label>
+        <div class="input-shell">
+          <span>🔖</span>
+          <input type="text" id="username" placeholder="ex: joao_solar" autocomplete="username" oninput="validarUsername(this)">
+        </div>
+        <div id="username-hint" style="font-size:11px;color:#64748b;margin-top:4px;">Apenas letras, numeros e underscore. Minimo 3 caracteres.</div>
+      </div>
+
+      <div class="form-group">
+        <label>Telefone <span style="color:#64748b;font-size:12px;">(opcional)</span></label>
+        <div class="input-shell">
+          <span>📱</span>
+          <input type="tel" id="telefone" placeholder="+351 912 345 678" autocomplete="tel">
+        </div>
+      </div>
+
+      <div id="erro" class="form-message error" style="display:none;"></div>
+      <div id="sucesso" class="form-message success" style="display:none;"></div>
+
+      <button class="btn btn-primary auth-submit" id="guardar-btn" onclick="guardarPerfil()">☀️ Guardar e Continuar</button>
+
+      <div class="form-footer">
+        <a href="index.html" style="color:#64748b;font-size:13px;">Saltar por agora</a>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script>
+    // Pré-preencher com dados do Google se existirem
+    async function iniciar() {
+      const { data } = await supabaseClient.auth.getSession()
+      if (!data.session) {
+        window.location.href = 'login.html'
+        return
+      }
+      const meta = data.session.user.user_metadata || {}
+      if (meta.nome) document.getElementById('nome').value = meta.nome
+      if (meta.apelido) document.getElementById('apelido').value = meta.apelido
+      if (meta.username) document.getElementById('username').value = meta.username
+      if (meta.telefone) document.getElementById('telefone').value = meta.telefone
+      // Não redirecionar automaticamente — deixar o utilizador confirmar/editar
+    }
+
+    iniciar()
+
+    let usernameTimer = null
+    function validarUsername(input) {
+      const val = input.value
+      const hint = document.getElementById('username-hint')
+      const valido = /^[a-zA-Z0-9_]{3,}$/.test(val)
+      if (val.length === 0) {
+        hint.style.color = '#64748b'
+        hint.textContent = 'Letras (A-Z), numeros e underscore. Minimo 3 caracteres.'
+        return
+      }
+      if (!valido) {
+        hint.style.color = '#ef4444'
+        hint.textContent = 'Sem espacos ou acentos. Minimo 3 caracteres.'
+        return
+      }
+      hint.style.color = '#64748b'
+      hint.textContent = 'A verificar disponibilidade...'
+      clearTimeout(usernameTimer)
+      usernameTimer = setTimeout(async () => {
+        const { data: sessao } = await supabaseClient.auth.getSession()
+        const uid = sessao?.session?.user?.id
+        const myUsername = sessao?.session?.user?.user_metadata?.username || ''
+
+        // Se é o próprio username do utilizador atual, está disponível
+        if (val.toLowerCase() === myUsername.toLowerCase()) {
+          hint.style.color = '#22c55e'
+          hint.textContent = '✓ Este é o teu username atual'
+          return
+        }
+
+        const { data, error } = await supabaseClient
+          .from('profiles')
+          .select('id')
+          .ilike('username', val)
+          .neq('id', uid || '')
+          .maybeSingle()
+
+        if (error) {
+          hint.style.color = '#f59e0b'
+          hint.textContent = '⚠️ ' + error.message
+        } else if (data) {
+          hint.style.color = '#ef4444'
+          hint.textContent = '✗ Username já está a ser usado'
+        } else {
+          hint.style.color = '#22c55e'
+          hint.textContent = '✓ Username disponivel'
+        }
+      }, 600)
+    }
+
+    async function guardarPerfil() {
+      const nome = document.getElementById('nome').value.trim()
+      const apelido = document.getElementById('apelido').value.trim()
+      const username = document.getElementById('username').value.trim()
+      const telefone = document.getElementById('telefone').value.trim()
+      const btn = document.getElementById('guardar-btn')
+
+      if (!nome || !apelido) { mostrarErro('Preenche o nome e o apelido!'); return }
+      if (!username || !/^[a-zA-Z0-9_]{3,}$/.test(username)) {
+        mostrarErro('Username invalido. Usa apenas letras, numeros e _ com minimo 3 caracteres.')
+        return
+      }
+
+      btn.disabled = true
+      btn.textContent = 'A verificar...'
+
+      const { data: sessao } = await supabaseClient.auth.getSession()
+      const uid = sessao.session.user.id
+      const myUsername = sessao.session.user.user_metadata?.username || ''
+
+      // Só verificar duplicado se não é o próprio username atual
+      if (username.toLowerCase() !== myUsername.toLowerCase()) {
+        const { data: existente } = await supabaseClient
+          .from('profiles')
+          .select('id')
+          .ilike('username', username)
+          .neq('id', uid)
+          .maybeSingle()
+
+        if (existente) {
+          btn.disabled = false
+          btn.textContent = '☀️ Guardar e Continuar'
+          mostrarErro('Este username já está a ser usado. Escolhe outro.')
+          return
+        }
+      }
+
+      btn.textContent = 'A guardar...'
+
+      // Guardar nos metadados do utilizador (funciona sempre)
+      const { error: erroMeta } = await supabaseClient.auth.updateUser({
+        data: { nome, apelido, username, telefone: telefone || '' }
+      })
+
+      // Tentar guardar na tabela profiles (opcional - pode falhar se RLS não estiver configurado)
+      await supabaseClient
+        .from('profiles')
+        .upsert({ id: uid, nome, apelido, username, telefone: telefone || null })
+
+      btn.disabled = false
+      btn.textContent = '☀️ Guardar e Continuar'
+
+      if (erroMeta) { mostrarErro(erroMeta.message); return }
+
+      mostrarSucesso('Perfil guardado! A redirecionar...')
+      setTimeout(() => { window.location.href = 'index.html' }, 1000)
+    }
+
+    function mostrarErro(msg) {
+      document.getElementById('sucesso').style.display = 'none'
+      const el = document.getElementById('erro')
+      el.textContent = msg
+      el.style.display = 'block'
+    }
+
+    function mostrarSucesso(msg) {
+      document.getElementById('erro').style.display = 'none'
+      const el = document.getElementById('sucesso')
+      el.textContent = msg
+      el.style.display = 'block'
+    }
+  </script>
+</body>
+</html>

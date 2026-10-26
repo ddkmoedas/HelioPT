@@ -1,6 +1,6 @@
 # HelioPT
 
-HelioPT e um site interativo para explorar o potencial solar em Portugal. O utilizador pode selecionar uma regiao no mapa, ver estimativas de producao diaria/anual, calcular poupanca aproximada e c...
+(Muito inconpleto) HelioPT e um site interativo para explorar o potencial solar em Portugal. O utilizador pode selecionar uma regiao no mapa, ver estimativas de producao diaria/anual, calcular poupanca aproximada e c...
 
 ## Funcionalidades
 
